@@ -10,7 +10,7 @@ namespace util {
 class Date
 {
    public:
-    static size_t now() { return static_cast<size_t>(time(nullptr)); }
+    static time_t now() { return time(nullptr);}
 };
 }  // namespace util
 }  // namespace windlog
