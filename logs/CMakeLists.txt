@@ -3,14 +3,10 @@ project(CoreLog)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-include(FetchContent)
-
-FetchContent_Declare(
-  googletest
-  URL https://github.com/google/googletest/archive/release-1.12.1.zip
-)
-FetchContent_MakeAvailable(googletest)
+# 查找系统安装的 GTest
+find_package(GTest REQUIRED)
 
 enable_testing()
+include(GoogleTest)
 
 add_subdirectory(test)

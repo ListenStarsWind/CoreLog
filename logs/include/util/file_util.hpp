@@ -51,6 +51,24 @@ class file
             return pathname.substr(0, pos);
     }
 
+    static std::string basename(const std::string& pathname)
+    {
+        size_t pos = pathname.find_last_of("/\\");
+        if (pos == std::string::npos)
+            return pathname;  // 没有路径，整个就是文件名
+        else
+            return pathname.substr(pos + 1);  // 跳过分隔符
+    }
+
+    static std::string stem(const std::string& basename)
+    {
+        size_t pos = basename.find_last_of('.');
+        if (pos == std::string::npos)
+            return basename;
+        else
+            return basename.substr(0, pos);
+    }
+
     static void createDirectory(const std::string& pathname)
     {
         /*

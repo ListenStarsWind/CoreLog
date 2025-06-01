@@ -60,3 +60,17 @@ TEST(FileUtilTest, CreateDirectoryMakesNestedDirs) {
     fs::remove_all("tmp");
 }
 
+TEST(FileUtilTest, BasenameExtractsFilename) {
+    EXPECT_EQ(util::file::basename("/var/log/syslog.txt"), "syslog.txt");
+    EXPECT_EQ(util::file::basename("relative/path/file.txt"), "file.txt");
+    EXPECT_EQ(util::file::basename("justfile"), "justfile");
+    EXPECT_EQ(util::file::basename("/trailing/slash/"), "");
+}
+
+TEST(FileUtilTest, StemExtractsNameWithoutExtension) {
+    EXPECT_EQ(util::file::stem("syslog.txt"), "syslog");
+    EXPECT_EQ(util::file::stem("archive.tar.gz"), "archive.tar");  // 注意只去掉最后一段
+    EXPECT_EQ(util::file::stem("noext"), "noext");
+    EXPECT_EQ(util::file::stem(""), "");
+}
+

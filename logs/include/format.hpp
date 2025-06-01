@@ -19,24 +19,34 @@ namespace windlog {
 
 /*
     抽象格式化基类
+    对于基类析构函数, 为了确保派生重写, 必须使用虚函数
+    但析构由于是自动调用, 所以又不能纯虚, 所以外面还要
+    再定义一个定义, 这里加inline是为了防止多重定义, 这
+    是inline的另一个用法, 当别的文件中也出现同种函数定
+    义时, 如果它们相同, 会被编译器合并, 不相同, 编译器
+    报错
 */
 
 class FormatItem
 {
    public:
     using ptr = std::shared_ptr<FormatItem>;
+    virtual ~FormatItem() = 0;
     virtual void format(std::ostream& out, const LogMsg& msg) = 0;
 };
+inline FormatItem::~FormatItem() = default;
 
 class MsgFormatItem : public FormatItem
 {
    public:
+    ~MsgFormatItem() override = default;
     void format(std::ostream& out, const LogMsg& msg) override { out << msg._payload; }
 };
 
 class LevelFormatItem : public FormatItem
 {
    public:
+    ~LevelFormatItem() override = default;
     void format(std::ostream& out, const LogMsg& msg) override
     {
         out << LogLevel::toString(msg._level);
@@ -59,6 +69,7 @@ class LevelFormatItem : public FormatItem
 class DateFormatItem : public FormatItem
 {
    public:
+    ~DateFormatItem() override = default;
     DateFormatItem(const std::string& time_fmt = "%H:%M:%S") : _time_fmt(time_fmt) {}
 
     void format(std::ostream& out, const LogMsg& msg) override
@@ -77,36 +88,42 @@ class DateFormatItem : public FormatItem
 class FileFormatItem : public FormatItem
 {
    public:
+    ~FileFormatItem() override = default;
     void format(std::ostream& out, const LogMsg& msg) override { out << msg._file; }
 };
 
 class LineFormatItem : public FormatItem
 {
    public:
+    ~LineFormatItem() override = default;
     void format(std::ostream& out, const LogMsg& msg) override { out << msg._line; }
 };
 
 class ThreadFormatItem : public FormatItem
 {
    public:
+    ~ThreadFormatItem() override = default;
     void format(std::ostream& out, const LogMsg& msg) override { out << msg._tid; }
 };
 
 class LoggerFormatItem : public FormatItem
 {
    public:
+    ~LoggerFormatItem() override = default;
     void format(std::ostream& out, const LogMsg& msg) override { out << msg._logger; }
 };
 
 class TabFormatItem : public FormatItem
 {
    public:
+    ~TabFormatItem() override = default;
     void format(std::ostream& out, const LogMsg& msg) override { out << '\t'; }
 };
 
 class NLineFormatItem : public FormatItem
 {
    public:
+    ~NLineFormatItem() override = default;
     void format(std::ostream& out, const LogMsg& msg) override { out << '\n'; }
 };
 
@@ -116,6 +133,7 @@ class NLineFormatItem : public FormatItem
 class OtherFormatItem : public FormatItem
 {
    public:
+    ~OtherFormatItem() override = default;
     OtherFormatItem(const std::string& str) : _str(str) {}
 
     void format(std::ostream& out, const LogMsg& msg) override { out << _str; }
