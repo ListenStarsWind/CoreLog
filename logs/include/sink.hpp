@@ -101,7 +101,7 @@ class RollBySizeSink : public LogSink
         localtime_r(&ct, &t);
         std::stringstream filename;
         filename << _basename << '-' << t.tm_year + 1900 << t.tm_mon + 1 << t.tm_mday << '-'
-                 << t.tm_hour <<':'<< t.tm_min <<':'<< t.tm_sec <<'-'<< _file_idx++ << ".log";
+                 << t.tm_hour <<':'<< t.tm_min <<':'<< t.tm_sec <<'-'<< _file_idx << ".log";
 
         return filename.str();
     }

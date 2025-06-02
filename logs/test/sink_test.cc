@@ -180,7 +180,7 @@ class RollByTimeSink : public LogSink
         localtime_r(&ct, &t);
         std::stringstream filename;
         filename << _basename << '-' << t.tm_year + 1900 << t.tm_mon + 1 << t.tm_mday << '-'
-                 << t.tm_hour << ":" << t.tm_min << ":" << t.tm_sec << ".log";
+                 << t.tm_hour << '_' << t.tm_min << '_' << t.tm_sec << ".log";
 
         return filename.str();
     }
