@@ -260,7 +260,7 @@ class Formatter
     }
 
    public:
-   using ptr = std::shared_ptr<Formatter>;
+    using ptr = std::shared_ptr<Formatter>;
     Formatter(const std::string& pattern = "[%p]%T[%d{%H:%M:%S}][%c][%t]%T[%f:%l]%T%m%n")
         : _pattern(pattern), _formatKeys("pTdctflmn")
     {
@@ -282,7 +282,7 @@ class Formatter
         }
         else
         {
-            std::cerr<<"Log formatting failed in parsePattern()"<<std::endl;
+            throw std::runtime_error("Log formatting failed in parsePattern()");
         }
     }
     std::string format(const LogMsg& msg)

@@ -39,6 +39,7 @@
     }
 
 #include <atomic>
+#include<cassert>
 #include <cstdarg>
 #include <cstdlib>
 #include <mutex>
@@ -122,6 +123,90 @@ class SyncLogger : public Logger
         {
             sink->log(data, len);
         }
+    }
+};
+
+/*
+    使用建造者模式来建造日志器, 而不是让用户直接去构造日志器,简化用户的使用复杂度
+    1. 抽象一个日志器建造者类(完成日志器对象所需零部件的构建  &  日志器的构建)
+        1). 设置日志器类型(不是按照日志器类型进行派生的, 而是依据功能派生的, 日志器的类别,
+   在基类中就以区分) 2). 将不同类型日志器的创建放到同一个日志器建造者类中完成
+    2. 依据功能派生出两个具体的建造者, 局部日志器的建造者 & 全局的日志器建造者
+   之后再引入全局单例管理器后, 回来写全局派生
+
+   因为建造没有顺序要求, 所以指挥者省略了
+*/
+
+class LoggerBuilder
+{
+   public:
+    enum class LoggerType
+    {
+        LOGGER_SYNC,
+        LOGGER_ASYNC
+    };
+
+    /*
+        默认使用同步日志器, 下界等级为debug
+    */
+    LoggerBuilder() : _type(LoggerType::LOGGER_SYNC), _lower_level(LogLevel::value::DEBUG) {}
+
+    virtual ~LoggerBuilder() = 0;
+
+    void buildLoggerType(LoggerType type) { _type = type; }
+    void buildLoggerName(const std::string& name) { _logger_name = name; }
+    void buildLoggerLevel(LogLevel::value level) { _lower_level = level; }
+
+    void buildLoggerFormatter(const std::string& pattern)
+    {
+        _formatter = std::make_shared<Formatter>(pattern);
+    }
+
+    template <typename SinkType, typename... Args>
+    void buildLoggerSink(Args&&... args)
+    {
+        auto sink = SinkFactory::create<SinkType>(std::forward<Args>(args)...);
+        _sinks.emplace_back(std::move(sink));
+    }
+
+    virtual Logger::ptr build() = 0;
+
+   protected:
+    LoggerType _type;
+    std::string _logger_name;
+
+    LogLevel::value _lower_level;
+    Formatter::ptr _formatter;
+
+    std::vector<LogSink::ptr> _sinks;
+};
+inline LoggerBuilder::~LoggerBuilder() = default;
+
+class LocalLoggerBuilder : public LoggerBuilder
+{
+   public:
+    LocalLoggerBuilder() = default;
+    ~LocalLoggerBuilder() override = default;
+    Logger::ptr build() override
+    {
+        assert(!_logger_name.empty());
+        if(_formatter.get() == nullptr)
+        {
+            _formatter = std::make_shared<Formatter>();
+        }
+        if(_sinks.empty())
+        {
+            buildLoggerSink<StdoutSink>();
+        }
+
+        
+        if (_type == LoggerBuilder::LoggerType::LOGGER_SYNC)
+            return std::make_shared<SyncLogger>(_logger_name, _lower_level, _formatter, _sinks);
+        else if (_type == LoggerBuilder::LoggerType::LOGGER_ASYNC)
+            return {};
+        else
+            throw std::runtime_error(
+                "Construct a logger that does not yet exist within LocalLoggerBuilder");
     }
 };
 }  // namespace windlog
