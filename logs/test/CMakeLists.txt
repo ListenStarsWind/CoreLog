@@ -1,7 +1,7 @@
 find_package(GTest REQUIRED)
 include(GoogleTest)
 
-set(TEST_TARGETS util_test level_test format_test sink_test synclogger_test buffer_test)
+set(TEST_TARGETS util_test level_test format_test sink_test synclogger_test buffer_test asynclogger_test)
 
 foreach(test_target IN LISTS TEST_TARGETS)
     add_executable(${test_target} ${test_target}.cc)

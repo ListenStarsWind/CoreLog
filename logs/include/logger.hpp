@@ -39,15 +39,17 @@
     }
 
 #include <atomic>
-#include<cassert>
+#include <cassert>
 #include <cstdarg>
 #include <cstdlib>
 #include <mutex>
 #include <string>
 #include <vector>
 
+#include "buffer.hpp"
 #include "format.hpp"
 #include "level.hpp"
+#include "looper.hpp"
 #include "message.hpp"
 #include "sink.hpp"
 
@@ -127,6 +129,50 @@ class SyncLogger : public Logger
 };
 
 /*
+    异步日志器的设计:
+    1. 仍旧继承于抽象基类Logger, 并对其虚函数接口, log 和 析构函数
+    2. 通过异步消息处理器, 配合回调函数, 实现对消息的异步落地
+
+    管理的特有成员包括
+    1. 异步处理器
+    2. 异步处理器缓冲区满时的处理策略
+*/
+
+class AsyncLogger : public Logger
+{
+    // 异步线程的落地策略
+    void realLog(Buffer& buffer)
+    {
+        // 这个也不需要加锁, 因为_looper天然自带线程安全保护, 本身就是串行的
+        for (const auto& sink : _sinks)
+        {
+            sink->log(buffer.readAbleBegin(), buffer.readAbleSize());
+        }
+    }
+
+   public:
+    AsyncLogger(const std::string& logger_name, LogLevel::value lower_level,
+                Formatter::ptr formatter, const std::vector<LogSink::ptr> sinks,
+                AsyncLooper::mode mode)
+        : Logger(logger_name, lower_level, formatter, sinks),
+          _looper(std::make_shared<AsyncLooper>(
+              std::bind(&AsyncLogger::realLog, this, std::placeholders::_1), mode))
+    {
+    }
+
+    ~AsyncLogger() = default;
+
+    void log(const char* data, size_t len) override
+    {
+        // 无需加锁, _looper::push中的锁足以保证线程安全
+        _looper->push(data, len);
+    }
+
+   private:
+    AsyncLooper::ptr _looper;
+};
+
+/*
     使用建造者模式来建造日志器, 而不是让用户直接去构造日志器,简化用户的使用复杂度
     1. 抽象一个日志器建造者类(完成日志器对象所需零部件的构建  &  日志器的构建)
         1). 设置日志器类型(不是按照日志器类型进行派生的, 而是依据功能派生的, 日志器的类别,
@@ -148,8 +194,14 @@ class LoggerBuilder
 
     /*
         默认使用同步日志器, 下界等级为debug
+        默认缓冲区满时, 业务线程主动阻塞
     */
-    LoggerBuilder() : _type(LoggerType::LOGGER_SYNC), _lower_level(LogLevel::value::DEBUG) {}
+    LoggerBuilder()
+        : _type(LoggerType::LOGGER_SYNC),
+          _lower_level(LogLevel::value::DEBUG),
+          _mode(AsyncLooper::mode::ON_BUFFER_FULL_BLOCK)
+    {
+    }
 
     virtual ~LoggerBuilder() = 0;
 
@@ -169,6 +221,8 @@ class LoggerBuilder
         _sinks.emplace_back(std::move(sink));
     }
 
+    void buildLoggerMode(AsyncLooper::mode mode) { _mode = mode; }
+
     virtual Logger::ptr build() = 0;
 
    protected:
@@ -179,6 +233,8 @@ class LoggerBuilder
     Formatter::ptr _formatter;
 
     std::vector<LogSink::ptr> _sinks;
+
+    AsyncLooper::mode _mode;
 };
 inline LoggerBuilder::~LoggerBuilder() = default;
 
@@ -190,20 +246,20 @@ class LocalLoggerBuilder : public LoggerBuilder
     Logger::ptr build() override
     {
         assert(!_logger_name.empty());
-        if(_formatter.get() == nullptr)
+        if (_formatter.get() == nullptr)
         {
             _formatter = std::make_shared<Formatter>();
         }
-        if(_sinks.empty())
+        if (_sinks.empty())
         {
             buildLoggerSink<StdoutSink>();
         }
 
-        
         if (_type == LoggerBuilder::LoggerType::LOGGER_SYNC)
             return std::make_shared<SyncLogger>(_logger_name, _lower_level, _formatter, _sinks);
         else if (_type == LoggerBuilder::LoggerType::LOGGER_ASYNC)
-            return {};
+            return std::make_shared<AsyncLogger>(_logger_name, _lower_level, _formatter, _sinks,
+                                                 _mode);
         else
             throw std::runtime_error(
                 "Construct a logger that does not yet exist within LocalLoggerBuilder");
