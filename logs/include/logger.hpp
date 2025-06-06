@@ -44,6 +44,7 @@
 #include <cstdlib>
 #include <mutex>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "buffer.hpp"
@@ -88,6 +89,8 @@ class Logger
             sink->flush();
         }
     }
+
+    const std::string name() { return _logger_name; }
 
     virtual ~Logger() = 0;
 
@@ -265,4 +268,108 @@ class LocalLoggerBuilder : public LoggerBuilder
                 "Construct a logger that does not yet exist within LocalLoggerBuilder");
     }
 };
+
+class LoggerManager
+{
+    /*
+        构造函数一定要使用本地建造者, 因为如果用户不调用的话,
+       日志管理器就应该在全局建造者里面实例化 如果使用全局建造者对默认日志器进行构造,
+       就会相互依赖, 全局建造者为了建造一个日志器实例化 日志管理器,
+       但日志管理又调用全局建造者实例化自己, 相互依赖, 逻辑死锁
+    */
+
+    LoggerManager()
+    {
+        std::unique_ptr<windlog::LoggerBuilder> builder(new windlog::LocalLoggerBuilder());
+        builder->buildLoggerName("root");
+        _root_logger = builder->build();
+        _loggers[_root_logger->name()] = _root_logger;
+    }
+
+    LoggerManager(const LoggerManager&) = delete;
+    LoggerManager& operator=(const LoggerManager&) = delete;
+
+   public:
+    ~LoggerManager() = default;
+
+    static LoggerManager& getInstance()
+    {
+        static LoggerManager _eton;
+        return _eton;
+    }
+
+    void addLogger(Logger::ptr& logger)
+    {
+        if (hashLogger(logger->name()))
+            return;
+
+        std::unique_lock<std::mutex> lock(_mutex);
+        _loggers[logger->name()] = logger;
+    }
+
+    bool hashLogger(const std::string& name)
+    {
+        std::unique_lock<std::mutex> lock(_mutex);
+        auto it = _loggers.find(name);
+        return it != _loggers.end();
+    }
+
+    Logger::ptr getLogger(const std::string& name)
+    {
+        if (hashLogger(name) == false)
+            return Logger::ptr();
+
+        std::unique_lock<std::mutex> lock(_mutex);
+        return _loggers[name];
+    }
+
+    Logger::ptr rootLogger() { return _root_logger; }
+
+   private:
+    std::mutex _mutex;
+    Logger::ptr _root_logger;
+    std::unordered_map<std::string, Logger::ptr> _loggers;
+};
+
+/*
+    全局日志器建造者, 在把日志器建造完成之后, 会交由日志管理器进行管理
+*/
+
+class GlobalLoggerBuilder : public LoggerBuilder
+{
+   public:
+    GlobalLoggerBuilder() = default;
+    ~GlobalLoggerBuilder() override = default;
+
+    // 建造前请确保已经为日志器命名
+    Logger::ptr build() override
+    {
+        assert(!_logger_name.empty());
+        if (_formatter.get() == nullptr)
+        {
+            _formatter = std::make_shared<Formatter>();
+        }
+        if (_sinks.empty())
+        {
+            buildLoggerSink<StdoutSink>();
+        }
+
+        if (LoggerManager::getInstance().hashLogger(_logger_name))
+            return LoggerManager::getInstance().getLogger(_logger_name);
+
+        Logger::ptr logger;
+        if (_type == LoggerBuilder::LoggerType::LOGGER_SYNC)
+            logger = std::make_shared<SyncLogger>(_logger_name, _lower_level, _formatter, _sinks);
+        else if (_type == LoggerBuilder::LoggerType::LOGGER_ASYNC)
+            logger = std::make_shared<AsyncLogger>(_logger_name, _lower_level, _formatter, _sinks,
+                                                   _mode);
+        else
+            throw std::runtime_error(
+                "Construct a logger that does not yet exist within LocalLoggerBuilder");
+
+        LoggerManager::getInstance().addLogger(logger);
+        return logger;
+    }
+};
+
 }  // namespace windlog

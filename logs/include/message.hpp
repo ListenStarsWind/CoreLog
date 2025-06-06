@@ -6,6 +6,7 @@
 #include <thread>
 
 #include "level.hpp"
+#include "util/file_util.hpp"
 #include "util/time_util.hpp"
 
 namespace windlog {
@@ -23,7 +24,7 @@ struct LogMsg
            const std::string& payload)
         : _ctime(util::Date::now()),
           _level(level),
-          _file(file),
+          _file(util::file::basename(file)),
           _line(line),
           _tid(std::this_thread::get_id()),
           _logger(logger),
