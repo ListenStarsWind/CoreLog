@@ -11,3 +11,4 @@ include(GoogleTest)
 
 add_subdirectory(unittest)
 add_subdirectory(example)
+add_subdirectory(perf)
